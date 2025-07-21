@@ -1,5 +1,6 @@
 import { Place } from '@/types';
-import { PlaceCard } from './PlaceCard';
+import { PlaceCard } from './place';
+import { getFavoriteStatuses } from '@/app/actions/favorites';
 
 /**
  * 検索結果一覧を表示するコンポーネント
@@ -50,7 +51,7 @@ function NoResults({ query }: { query?: string }) {
 /**
  * 検索結果一覧コンポーネント
  */
-export function SearchResults({ places, query, error }: SearchResultsProps) {
+export async function SearchResults({ places, query, error }: SearchResultsProps) {
   // エラー時
   if (error) {
     return <ErrorMessage error={error} />;
@@ -65,6 +66,10 @@ export function SearchResults({ places, query, error }: SearchResultsProps) {
   if (places.length === 0) {
     return <NoResults query={query} />;
   }
+
+  // お気に入り状態をサーバーアクション経由で取得
+  const placeIds = places.map(place => place.place_id);
+  const favoriteStatuses = await getFavoriteStatuses(placeIds);
 
   // 検索結果を表示
   return (
@@ -82,7 +87,11 @@ export function SearchResults({ places, query, error }: SearchResultsProps) {
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1">
         {places.map((place) => (
-          <PlaceCard key={place.place_id} place={place} />
+          <PlaceCard 
+            key={place.place_id} 
+            place={place} 
+            isFavorite={favoriteStatuses.includes(place.place_id)}
+          />
         ))}
       </div>
     </div>

@@ -99,6 +99,39 @@ export class PlacesRepository {
   }
 
   /**
+   * 複数のplace_idから詳細情報を取得する
+   * @param placeIds 場所IDの配列
+   * @returns 詳細情報の配列
+   */
+  async getPlacesDetails(placeIds: string[]): Promise<Place[]> {
+    if (placeIds.length === 0) return [];
+
+    const results: Place[] = [];
+    
+    // 並列処理でAPIを呼び出し（ただし、レート制限に注意）
+    const promises = placeIds.map(async (placeId) => {
+      try {
+        const place = await this.getPlaceDetails(placeId);
+        return place;
+      } catch (error) {
+        console.error(`Failed to get details for place_id ${placeId}:`, error);
+        return null;
+      }
+    });
+
+    const placesResults = await Promise.all(promises);
+    
+    // nullではない結果のみを返す
+    for (const place of placesResults) {
+      if (place) {
+        results.push(place);
+      }
+    }
+
+    return results;
+  }
+
+  /**
    * APIレスポンスを内部型に変換する
    * @param result APIレスポンスの結果
    * @returns 変換された場所情報

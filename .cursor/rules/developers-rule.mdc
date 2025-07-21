@@ -1,6 +1,3 @@
----
-alwaysApply: true
----
 
 # My Places アプリケーション 開発者ガイドライン
 
@@ -16,6 +13,7 @@ Google Places APIのテキスト検索機能を使用して、ユーザーが場
 - テキスト入力による場所検索
 - 検索結果の一覧表示
 - 場所の詳細情報表示（名前、住所、評価、営業時間、価格レベル）
+- お気に入りPOI管理機能
 - サーバーサイドレンダリング（SEO対応）
 
 ## 2. 技術スタック
@@ -27,6 +25,7 @@ Google Places APIのテキスト検索機能を使用して、ユーザーが場
 - TypeScript 5
 - Tailwind CSS 3.4
 - @googlemaps/google-maps-services-js
+- @supabase/supabase-js (データベース)
 ```
 
 ### 2.2 開発環境
@@ -35,6 +34,7 @@ Google Places APIのテキスト検索機能を使用して、ユーザーが場
 - npm/yarn
 - ESLint
 - TypeScript
+- Supabase CLI
 ```
 
 ## 3. アーキテクチャ方針
@@ -44,43 +44,335 @@ Google Places APIのテキスト検索機能を使用して、ユーザーが場
 - **型安全性**: TypeScriptを活用した完全な型安全性の確保
 - **SEO最適化**: サーバーサイドレンダリングによるSEO対応
 - **セキュリティ**: APIキーのサーバーサイド管理
+- **データアクセス層の分離**: Repository → Server Actions → Components の階層構造
 
 ### 3.2 レンダリング戦略
 - **Server Components**: デフォルトでサーバーコンポーネントを使用
 - **Client Components**: 必要最小限に留める（`'use client'`明記）
-- **Server Actions**: フォーム処理にはサーバーアクションを使用
+- **Server Actions**: フォーム処理とデータアクセスにはサーバーアクションを使用
 
 ### 3.3 状態管理
 - **URL State**: 検索クエリはURLパラメータで管理
 - **Server State**: サーバーサイドでのデータフェッチ
 - **Local State**: クライアントサイドの状態は最小限
 
-## 4. ディレクトリ構造
+## 4. 機能開発ワークフロー
+
+### 4.1 新機能開発の標準フロー
+新機能開発は以下の順序で行う：
+
+#### Step 1: データベース設計
+```bash
+# 1. マイグレーションファイルを作成
+supabase migration new create_feature_table
+
+# 2. SQLでテーブル定義を記述
+# - 必要最小限のカラム構成
+# - updated_at自動更新トリガーの設定
+# - 適切なインデックスの作成
+
+# 3. マイグレーションを適用
+supabase db push
+```
+
+#### Step 2: 型定義の更新
+```bash
+# Supabaseから型情報を自動生成
+npm run update-types
+```
+
+#### Step 3: リポジトリクラスの作成
+```typescript
+// src/repositories/featureRepository.ts
+export class FeatureRepository {
+  // データベースアクセスメソッドを実装
+  // - CRUD操作
+  // - 適切なエラーハンドリング
+  // - 型安全な戻り値
+}
+```
+
+#### Step 4: サーバーアクションの作成
+```typescript
+// src/app/actions/feature.ts
+'use server';
+
+// Repository経由でのデータアクセス
+// - エラーハンドリングの統一
+// - revalidatePath/revalidateTagの適切な使用
+// - 戻り値の型安全性
+```
+
+#### Step 5: コンポーネント分割と実装
+```
+# 関連コンポーネントをディレクトリでまとめる
+src/components/feature/
+├── FeatureCard.tsx        # メインコンポーネント（サーバー）
+├── FeatureButton.tsx      # インタラクティブ部分（クライアント）
+├── FeatureDetails.tsx     # 詳細表示（サーバー）
+└── index.ts              # エクスポート
+```
+
+#### Step 6: ページ実装
+```typescript
+// src/app/feature/page.tsx
+// サーバーアクション経由でデータを取得
+// 適切なエラーハンドリング
+// メタデータの設定
+```
+
+#### Step 7: ビルド確認
+```bash
+# 開発完了後は必ずビルドが通ることを確認
+npm run build
+
+# ビルドエラーが発生した場合は必ず修正してからコミット
+# - 型エラーの修正
+# - インポートエラーの修正
+# - 構文エラーの修正
+# - 未使用変数・インポートの削除
+```
+
+### 4.2 開発時の注意点
+- **Repository層**: データベースアクセスロジックのみを担当
+- **Server Actions**: Repository呼び出しとキャッシュ制御
+- **Components**: 表示ロジックのみを担当
+- **型安全性**: 各層で適切な型定義を使用
+- **ビルド確認**: 機能実装完了後は必ず`npm run build`でビルドが通ることを確認
+
+## 5. コンポーネント分割戦略
+
+### 5.1 ディレクトリ構成ルール
+関連するコンポーネントは機能ごとにディレクトリでまとめる：
+
+```
+src/components/
+├── common/                # 共通コンポーネント
+│   ├── Button.tsx
+│   ├── Modal.tsx
+│   └── index.ts
+├── place/                 # 場所関連
+│   ├── PlaceCard.tsx      # メインカード（サーバー）
+│   ├── FavoriteButton.tsx # お気に入りボタン（クライアント）
+│   ├── StarRating.tsx     # 星評価（サーバー）
+│   ├── OpeningStatus.tsx  # 営業時間（サーバー）
+│   ├── PriceLevel.tsx     # 価格レベル（サーバー）
+│   └── index.ts          # 統一エクスポート
+└── search/               # 検索関連
+    ├── SearchForm.tsx
+    ├── SearchResults.tsx
+    └── index.ts
+```
+
+### 5.2 コンポーネント分割の原則
+
+#### 5.2.1 サーバー/クライアント分離
+```typescript
+// ✅ 良い例: 必要最小限のクライアントコンポーネント
+// FavoriteButton.tsx
+'use client';
+export function FavoriteButton({ placeId, isFavorite }: Props) {
+  // インタラクションロジックのみ
+}
+
+// PlaceCard.tsx（サーバーコンポーネント）
+import { FavoriteButton } from './FavoriteButton';
+export function PlaceCard({ place, isFavorite }: Props) {
+  return (
+    <div>
+      {/* 静的コンテンツ */}
+      <FavoriteButton placeId={place.place_id} isFavorite={isFavorite} />
+    </div>
+  );
+}
+```
+
+#### 5.2.2 単一責任の原則
+```typescript
+// ✅ 各コンポーネントは単一の責任を持つ
+StarRating.tsx      // 星評価表示のみ
+OpeningStatus.tsx   // 営業時間表示のみ
+PriceLevel.tsx      // 価格レベル表示のみ
+```
+
+#### 5.2.3 Props設計
+```typescript
+// ✅ インターフェースを明確に定義
+export interface PlaceCardProps {
+  place: Place;
+  isFavorite?: boolean;
+}
+
+// ✅ 必要最小限のPropsを渡す
+<FavoriteButton placeId={place.place_id} isFavorite={isFavorite} />
+```
+
+### 5.3 エクスポート戦略
+```typescript
+// src/components/place/index.ts
+export * from './PlaceCard';
+export * from './FavoriteButton';
+export * from './StarRating';
+export * from './OpeningStatus';
+export * from './PriceLevel';
+
+// src/components/index.ts
+export * from './common';
+export * from './place';
+export * from './search';
+```
+
+## 6. サーバーアクション設計原則
+
+### 6.1 基本設計方針
+- **Repository層の抽象化**: サーバーアクションからのみRepository呼び出し
+- **エラーハンドリングの統一**: 一貫したエラーレスポンス形式
+- **キャッシュ制御**: 適切なrevalidationの実行
+- **型安全性**: 厳密な戻り値型定義
+
+### 6.2 サーバーアクションの実装パターン
+
+#### 6.2.1 CRUD操作の標準形
+```typescript
+'use server';
+
+import { Repository } from '@/repositories';
+import { revalidatePath } from 'next/cache';
+
+const repository = new Repository();
+
+// 作成操作
+export async function createItem(data: CreateParams) {
+  try {
+    const result = await repository.create(data);
+    revalidatePath('/items');
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('Create item error:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to create item' 
+    };
+  }
+}
+
+// 読み込み操作
+export async function getItems(): Promise<{
+  success: boolean;
+  data?: Item[];
+  error?: string;
+}> {
+  try {
+    const items = await repository.getAll();
+    return { success: true, data: items };
+  } catch (error) {
+    console.error('Get items error:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to get items' 
+    };
+  }
+}
+
+// 更新操作
+export async function updateItem(id: string, data: UpdateParams) {
+  try {
+    await repository.update(id, data);
+    revalidatePath('/items');
+    revalidatePath(`/items/${id}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Update item error:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to update item' 
+    };
+  }
+}
+
+// 削除操作
+export async function deleteItem(id: string) {
+  try {
+    await repository.delete(id);
+    revalidatePath('/items');
+    return { success: true };
+  } catch (error) {
+    console.error('Delete item error:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to delete item' 
+    };
+  }
+}
+```
+
+#### 6.2.2 レスポンス型の統一
+```typescript
+// 共通レスポンス型
+type ActionResponse<T = void> = {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+};
+
+// 使用例
+export async function actionExample(): Promise<ActionResponse<Item[]>> {
+  // 実装
+}
+```
+
+### 6.3 キャッシュ戦略
+```typescript
+// ✅ 適切なrevalidation
+export async function updateFavorite(placeId: string) {
+  try {
+    await repository.updateFavorite(placeId);
+    
+    // 関連ページのキャッシュを更新
+    revalidatePath('/');           // ホームページ
+    revalidatePath('/favorites');  // お気に入りページ
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: 'Update failed' };
+  }
+}
+```
+
+## 7. ディレクトリ構造
 
 ```
 src/
 ├── types/              # 型定義
 │   ├── places.ts      # Places API関連の型
+│   ├── supabase.ts    # Supabase自動生成型
 │   └── index.ts       # エクスポート
-├── repositories/       # API呼び出しロジック
+├── lib/               # ライブラリ設定
+│   └── supabase.ts    # Supabaseクライアント
+├── repositories/      # データアクセス層
 │   ├── placesRepository.ts
+│   ├── favoritesRepository.ts
 │   └── index.ts
 ├── app/               # Next.js App Router
 │   ├── actions/       # サーバーアクション
-│   │   └── searchPlaces.ts
+│   │   ├── searchPlaces.ts
+│   │   └── favorites.ts
+│   ├── favorites/     # お気に入りページ
+│   │   └── page.tsx
 │   ├── layout.tsx     # ルートレイアウト
 │   └── page.tsx       # ホームページ
 └── components/        # UIコンポーネント
+    ├── common/        # 共通コンポーネント
+    ├── place/         # 場所関連コンポーネント
+    ├── search/        # 検索関連コンポーネント
     ├── Header.tsx
-    ├── SearchForm.tsx
-    ├── SearchResults.tsx
-    ├── PlaceCard.tsx
     └── index.ts
 ```
 
-## 5. 命名規則
+## 8. 命名規則
 
-### 5.1 ファイル・ディレクトリ
+### 8.1 ファイル・ディレクトリ
 ```
 - Reactコンポーネントファイル: PascalCase (例: SearchForm.tsx)
 - 非コンポーネントファイル: camelCase (例: searchPlaces.ts, placesRepository.ts)
@@ -89,7 +381,7 @@ src/
 - インデックスファイル: index.ts (そのまま)
 ```
 
-### 5.2 コード内命名
+### 8.2 コード内命名
 ```typescript
 // 変数・関数: camelCase
 const searchQuery = 'tokyo station';
@@ -106,7 +398,7 @@ export function SearchForm() {}
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 ```
 
-### 5.3 API関連命名
+### 8.3 API関連命名
 ```typescript
 // APIパラメータ: snake_case (Google Maps API準拠)
 interface Place {
@@ -119,9 +411,9 @@ interface Place {
 const transformPlaceResult = (result: PlaceData) => {};
 ```
 
-## 6. 型定義規則
+## 9. 型定義規則
 
-### 6.1 型定義の配置
+### 9.1 型定義の配置
 ```typescript
 // src/types/places.ts - Places API関連
 export interface Place {
@@ -130,11 +422,15 @@ export interface Place {
   // ...
 }
 
+// src/types/supabase.ts - Supabase自動生成型
+// npm run update-types で自動更新
+
 // src/types/index.ts - 統一エクスポート
 export * from './places';
+export * from './supabase';
 ```
 
-### 6.2 型安全性の確保
+### 9.2 型安全性の確保
 ```typescript
 // 必須フィールドと任意フィールドの明確な区別
 interface Place {
@@ -147,22 +443,28 @@ interface Place {
 async function searchPlaces(params: SearchPlacesParams): Promise<Place[]> {
   // ...
 }
+
+// Supabase型の活用
+type FavoritePlace = Database['public']['Tables']['favorite_places']['Row'];
+type FavoritePlaceInsert = TablesInsert<'favorite_places'>;
 ```
 
-## 7. コンポーネント設計
+## 10. コンポーネント設計
 
-### 7.1 コンポーネント分割方針
+### 10.1 コンポーネント分割方針
 ```
 - 機能的な単位で適切に分割
 - 単一責任の原則を遵守
 - 再利用可能性を考慮
+- サーバーコンポーネント優先、必要時のみクライアントコンポーネント
 ```
 
-### 7.2 Propsの設計
+### 10.2 Propsの設計
 ```typescript
 // インターフェースを明確に定義
 interface PlaceCardProps {
   place: Place;
+  isFavorite?: boolean;
 }
 
 // デフォルト値を適切に設定
@@ -173,7 +475,7 @@ interface SearchResultsProps {
 }
 ```
 
-### 7.3 TSDoc記述
+### 10.3 TSDoc記述
 ```typescript
 /**
  * 場所検索フォームコンポーネント
@@ -186,9 +488,9 @@ export function SearchForm() {
 }
 ```
 
-## 8. API統合
+## 11. API統合
 
-### 8.1 Google Maps Services統合
+### 11.1 Google Maps Services統合
 ```typescript
 // @googlemaps/google-maps-services-jsを使用
 import { Client, PlaceData, Language } from '@googlemaps/google-maps-services-js';
@@ -201,7 +503,19 @@ export class PlacesRepository {
 }
 ```
 
-### 8.2 エラーハンドリング
+### 11.2 Supabase統合
+```typescript
+// Supabaseクライアントの設定
+import { createClient } from '@supabase/supabase-js';
+import { Database } from '@/types/supabase';
+
+export const supabase = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+```
+
+### 11.3 エラーハンドリング
 ```typescript
 // 適切なエラーメッセージとログ出力
 try {
@@ -209,51 +523,63 @@ try {
   return results;
 } catch (error) {
   console.error('Search places error:', error);
-  return null;
+  throw new Error('Failed to search places');
 }
 ```
 
-## 9. 環境設定
+## 12. 環境設定
 
-### 9.1 環境変数
+### 12.1 環境変数
 ```bash
 # .env.local
 GOOGLE_MAPS_API_KEY=your_api_key_here
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
-# 注意: サーバーサイド用のため NEXT_PUBLIC_ プレフィックス不要
+# 注意: サーバーサイド用APIキーは NEXT_PUBLIC_ プレフィックス不要
 ```
 
-### 9.2 必要なAPI設定
+### 12.2 必要なAPI設定
 ```
 Google Cloud Console で以下のAPIを有効化:
 - Places API (新版またはLegacy)
 - Geocoding API (推奨)
+
+Supabase プロジェクトの設定:
+- プロジェクトの作成
+- 必要なテーブルの作成
+- RLSポリシーの設定（必要に応じて）
 ```
 
-## 10. パフォーマンス
+## 13. パフォーマンス
 
-### 10.1 最適化方針
+### 13.1 最適化方針
 ```
 - サーバーサイドレンダリング優先
 - 必要最小限のJavaScript配信
 - 画像最適化（Next.js Image component使用推奨）
 - APIレスポンスの効率的な変換
+- 適切なキャッシュ戦略
 ```
 
-### 10.2 キャッシュ戦略
+### 13.2 キャッシュ戦略
 ```typescript
-// 将来的な拡張: Next.js App Routerのキャッシュ機能活用
+// Next.js App Routerのキャッシュ機能活用
 // fetch with cache options
 const response = await fetch(url, {
   next: { revalidate: 3600 } // 1時間キャッシュ
 });
+
+// Server Actionsでのrevalidation
+revalidatePath('/'); // 特定パスのキャッシュを更新
+revalidateTag('places'); // 特定タグのキャッシュを更新
 ```
 
-## 11. GitとPR管理
+## 14. GitとPR管理
 
-### 11.1 プルリクエスト作成ガイドライン
+### 14.1 プルリクエスト作成ガイドライン
 
-#### 11.1.1 タイトル命名規則
+#### 14.1.1 タイトル命名規則
 ```
 - feat: 新機能追加
 - fix: バグ修正
@@ -263,16 +589,16 @@ const response = await fetch(url, {
 - test: テストの追加・修正
 - chore: その他の変更
 
-例: feat: Supabaseセットアップとデータベース設定を追加
+例: feat: お気に入りPOI機能を追加
 ```
 
-#### 11.1.2 PR作成時の注意点
+#### 14.1.2 PR作成時の注意点
 - **タイトルは簡潔に**: 変更内容を50文字以内で要約
 - **説明文は簡潔にまとめること**: 重要なポイントのみを含める
 - **影響範囲を明記**: 新規追加 / 既存機能への影響
 - **次のステップを記載**: 必要に応じてTODOリストを含める
 
-#### 11.1.3 PR説明文のテンプレート
+#### 14.1.3 PR説明文のテンプレート
 ```markdown
 ## 概要
 [変更内容の簡潔な説明]
@@ -288,315 +614,18 @@ const response = await fetch(url, {
 - [ ] [必要な次の作業があれば記載]
 ```
 
-### 11.2 コミットメッセージ
+### 14.2 コミットメッセージ
 ```
 - 1行目: 変更概要（50文字以内）
 - 2行目: 空行
 - 3行目以降: 詳細説明（必要に応じて）
 
 例:
-feat: Supabaseセットアップとデータベース設定を追加
+feat: お気に入りPOI機能を追加
 
-- config.tomlファイルの追加
-- マイグレーション管理ルールの策定
-- 開発環境の拡張
-```
-# My Places アプリケーション 開発者ガイドライン
-
-## 1. アプリケーション概要
-
-### 1.1 プロジェクト名
-**My Places** - Google Places APIを使った場所検索アプリケーション
-
-### 1.2 目的
-Google Places APIのテキスト検索機能を使用して、ユーザーが場所を検索し、詳細情報（名前、住所、評価、営業時間、価格レベル）を表示するWebアプリケーション。
-
-### 1.3 主要機能
-- テキスト入力による場所検索
-- 検索結果の一覧表示
-- 場所の詳細情報表示（名前、住所、評価、営業時間、価格レベル）
-- サーバーサイドレンダリング（SEO対応）
-
-## 2. 技術スタック
-
-### 2.1 フレームワーク・ライブラリ
-```
-- Next.js 14 (App Router)
-- React 18
-- TypeScript 5
-- Tailwind CSS 3.4
-- @googlemaps/google-maps-services-js
-```
-
-### 2.2 開発環境
-```
-- Node.js v18以上
-- npm/yarn
-- ESLint
-- TypeScript
-```
-
-## 3. アーキテクチャ方針
-
-### 3.1 基本方針
-- **サーバーファースト**: 可能な限りサーバーコンポーネントで実装
-- **型安全性**: TypeScriptを活用した完全な型安全性の確保
-- **SEO最適化**: サーバーサイドレンダリングによるSEO対応
-- **セキュリティ**: APIキーのサーバーサイド管理
-
-### 3.2 レンダリング戦略
-- **Server Components**: デフォルトでサーバーコンポーネントを使用
-- **Client Components**: 必要最小限に留める（`'use client'`明記）
-- **Server Actions**: フォーム処理にはサーバーアクションを使用
-
-### 3.3 状態管理
-- **URL State**: 検索クエリはURLパラメータで管理
-- **Server State**: サーバーサイドでのデータフェッチ
-- **Local State**: クライアントサイドの状態は最小限
-
-## 4. ディレクトリ構造
-
-```
-src/
-├── types/              # 型定義
-│   ├── places.ts      # Places API関連の型
-│   └── index.ts       # エクスポート
-├── repositories/       # API呼び出しロジック
-│   ├── placesRepository.ts
-│   └── index.ts
-├── app/               # Next.js App Router
-│   ├── actions/       # サーバーアクション
-│   │   └── searchPlaces.ts
-│   ├── layout.tsx     # ルートレイアウト
-│   └── page.tsx       # ホームページ
-└── components/        # UIコンポーネント
-    ├── Header.tsx
-    ├── SearchForm.tsx
-    ├── SearchResults.tsx
-    ├── PlaceCard.tsx
-    └── index.ts
-```
-
-## 5. 命名規則
-
-### 5.1 ファイル・ディレクトリ
-```
-- Reactコンポーネントファイル: PascalCase (例: SearchForm.tsx)
-- 非コンポーネントファイル: camelCase (例: searchPlaces.ts, placesRepository.ts)
-- ディレクトリ名: kebab-case (例: components/, app/actions/)
-- 型定義ファイル: camelCase (例: places.ts)
-- インデックスファイル: index.ts (そのまま)
-```
-
-### 5.2 コード内命名
-```typescript
-// 変数・関数: camelCase
-const searchQuery = 'tokyo station';
-const getSearchResults = async () => {};
-
-// 型・インターフェース: PascalCase
-interface Place {}
-type SearchPlacesParams = {};
-
-// コンポーネント: PascalCase
-export function SearchForm() {}
-
-// 定数: SCREAMING_SNAKE_CASE
-const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
-```
-
-### 5.3 API関連命名
-```typescript
-// APIパラメータ: snake_case (Google Maps API準拠)
-interface Place {
-  place_id: string;
-  formatted_address: string;
-  user_ratings_total?: number;
-}
-
-// 内部関数: camelCase
-const transformPlaceResult = (result: PlaceData) => {};
-```
-
-## 6. 型定義規則
-
-### 6.1 型定義の配置
-```typescript
-// src/types/places.ts - Places API関連
-export interface Place {
-  place_id: string;
-  name: string;
-  // ...
-}
-
-// src/types/index.ts - 統一エクスポート
-export * from './places';
-```
-
-### 6.2 型安全性の確保
-```typescript
-// 必須フィールドと任意フィールドの明確な区別
-interface Place {
-  place_id: string;        // 必須
-  name: string;           // 必須
-  rating?: number;        // 任意
-}
-
-// 関数の戻り値型を明示
-async function searchPlaces(params: SearchPlacesParams): Promise<Place[]> {
-  // ...
-}
-```
-
-## 7. コンポーネント設計
-
-### 7.1 コンポーネント分割方針
-```
-- 機能的な単位で適切に分割
-- 単一責任の原則を遵守
-- 再利用可能性を考慮
-```
-
-### 7.2 Propsの設計
-```typescript
-// インターフェースを明確に定義
-interface PlaceCardProps {
-  place: Place;
-}
-
-// デフォルト値を適切に設定
-interface SearchResultsProps {
-  places: Place[] | null;
-  query?: string;
-  error?: string | null;
-}
-```
-
-### 7.3 TSDoc記述
-```typescript
-/**
- * 場所検索フォームコンポーネント
- * 
- * @description サーバーアクションを使用してフォーム送信を処理
- * @returns JSX要素
- */
-export function SearchForm() {
-  // ...
-}
-```
-
-## 8. API統合
-
-### 8.1 Google Maps Services統合
-```typescript
-// @googlemaps/google-maps-services-jsを使用
-import { Client, PlaceData, Language } from '@googlemaps/google-maps-services-js';
-
-// リポジトリパターンでAPI呼び出しを抽象化
-export class PlacesRepository {
-  private client: Client;
-  private apiKey: string;
-  // ...
-}
-```
-
-### 8.2 エラーハンドリング
-```typescript
-// 適切なエラーメッセージとログ出力
-try {
-  const results = await repository.searchPlaces(params);
-  return results;
-} catch (error) {
-  console.error('Search places error:', error);
-  return null;
-}
-```
-
-## 9. 環境設定
-
-### 9.1 環境変数
-```bash
-# .env.local
-GOOGLE_MAPS_API_KEY=your_api_key_here
-
-# 注意: サーバーサイド用のため NEXT_PUBLIC_ プレフィックス不要
-```
-
-### 9.2 必要なAPI設定
-```
-Google Cloud Console で以下のAPIを有効化:
-- Places API (新版またはLegacy)
-- Geocoding API (推奨)
-```
-
-## 10. パフォーマンス
-
-### 10.1 最適化方針
-```
-- サーバーサイドレンダリング優先
-- 必要最小限のJavaScript配信
-- 画像最適化（Next.js Image component使用推奨）
-- APIレスポンスの効率的な変換
-```
-
-### 10.2 キャッシュ戦略
-```typescript
-// 将来的な拡張: Next.js App Routerのキャッシュ機能活用
-// fetch with cache options
-const response = await fetch(url, {
-  next: { revalidate: 3600 } // 1時間キャッシュ
-});
-```
-
-## 11. GitとPR管理
-
-### 11.1 プルリクエスト作成ガイドライン
-
-#### 11.1.1 タイトル命名規則
-```
-- feat: 新機能追加
-- fix: バグ修正
-- docs: ドキュメント更新
-- style: コードスタイルの変更
-- refactor: リファクタリング
-- test: テストの追加・修正
-- chore: その他の変更
-
-例: feat: Supabaseセットアップとデータベース設定を追加
-```
-
-#### 11.1.2 PR作成時の注意点
-- **タイトルは簡潔に**: 変更内容を50文字以内で要約
-- **説明文は簡潔にまとめること**: 重要なポイントのみを含める
-- **影響範囲を明記**: 新規追加 / 既存機能への影響
-- **次のステップを記載**: 必要に応じてTODOリストを含める
-
-#### 11.1.3 PR説明文のテンプレート
-```markdown
-## 概要
-[変更内容の簡潔な説明]
-
-## 変更内容
-- [主要な変更点1]
-- [主要な変更点2]
-
-## 影響範囲
-- [影響のある機能や範囲]
-
-## 次のステップ
-- [ ] [必要な次の作業があれば記載]
-```
-
-### 11.2 コミットメッセージ
-```
-- 1行目: 変更概要（50文字以内）
-- 2行目: 空行
-- 3行目以降: 詳細説明（必要に応じて）
-
-例:
-feat: Supabaseセットアップとデータベース設定を追加
-
-- config.tomlファイルの追加
-- マイグレーション管理ルールの策定
-- 開発環境の拡張
+- favorite_placesテーブルの作成
+- FavoritesRepositoryクラスの実装
+- お気に入り登録/削除のサーバーアクション
+- PlaceCardへのお気に入りボタン追加
+- お気に入り一覧ページの実装
 ```

@@ -1,0 +1,132 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# データベースマイグレーション
+
+## 概要
+本プロジェクトでは、データベースのスキーマ変更やテーブル作成にSupabaseのDatabase Migrationsを利用している。
+
+## マイグレーションファイルの作成
+
+### 重要：マイグレーションファイル作成の必須ルール
+- **マイグレーションファイルは必ずSupabaseコマンドで作成する**
+- **手動でファイルを作成することは禁止**
+- ファイル名のタイムスタンプやフォーマットはSupabaseが自動生成するため
+
+### 新しいマイグレーションファイルの作成
+```bash
+supabase migration new <migration_name>
+```
+
+### 作成手順
+1. ターミナルでプロジェクトルートに移動
+2. `supabase migration new <migration_name>`コマンドを実行
+3. 生成されたファイルにSQLを記述
+
+### 命名規則
+- ファイル名は英語で、スネークケースを使用
+- 内容が理解できる具体的な名前をつける
+- 例：
+  - `create_trn_owned_property_table`
+  - `add_index_to_user_email`
+  - `update_user_table_add_phone_column`
+
+## マイグレーションファイルの記述
+
+### テーブル作成の例
+```sql
+-- コメントでテーブルの目的を記載
+CREATE TABLE IF NOT EXISTS public.table_name (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,  -- 主キー
+    name VARCHAR(255) NOT NULL,  -- 名前
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),  -- 作成日時
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()  -- 更新日時
+);
+```
+
+### ベストプラクティス
+- `CREATE TABLE IF NOT EXISTS` を使用してべき等性を保つ
+- 各カラムにコメントを記載する
+- `created_at`、`updated_at` カラムは標準的に含める
+- PRIMARY KEYは`INTEGER GENERATED ALWAYS AS IDENTITY`を使用
+- タイムスタンプは`TIMESTAMP WITH TIME ZONE`を使用
+
+## updated_at自動更新トリガー
+
+### 必須要件
+- **新規テーブル作成時、`updated_at`カラムがある場合は、必ず自動更新トリガーを作成する**
+- テーブル作成と同じマイグレーションファイル内でトリガーも一緒に定義する
+
+### トリガー作成の例
+```sql
+-- テーブル作成
+CREATE TABLE IF NOT EXISTS public.table_name (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+-- updated_atの自動更新トリガーを作成
+CREATE TRIGGER update_table_name_updated_at 
+    BEFORE UPDATE ON table_name 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+```
+
+### トリガー命名規則
+- トリガー名は `update_{テーブル名}_updated_at` の形式とする
+- 例：
+  - `mst_user` テーブル → `update_mst_user_updated_at`
+  - `trn_owned_property` テーブル → `update_trn_owned_property_updated_at`
+
+### 共通関数について
+- `update_updated_at_column()` 関数は既に定義済みのため、新規作成は不要
+- この関数はレコード更新時に自動的に `updated_at` を現在時刻に設定する
+
+## Supabaseへの反映
+
+### マイグレーションの適用
+```bash
+supabase db push
+```
+
+### 注意事項
+- マイグレーションを適用する前に、SQLファイルの内容を確認する
+- 本番環境への適用前に、必要に応じてローカル環境でテストする
+- マイグレーションは一度適用されると元に戻せないため、慎重に行う
+
+## マイグレーション管理
+
+### マイグレーションファイルの場所
+- `supabase/migrations/` ディレクトリ
+- ファイル名は自動的にタイムスタンプが付与される
+
+### マイグレーション履歴の確認
+```bash
+supabase migration list
+```
+
+### ローカル開発環境でのリセット
+```bash
+supabase db reset
+```
+
+## 外部キー制約について
+- プロジェクトの方針により、外部キー制約は基本的に使用しない
+- 参照関係はアプリケーション層で管理する
+- 必要に応じて、コメントで参照関係を明記する
+
+## TypeScript型の更新
+マイグレーション適用後は、TypeScript型を更新する：
+```bash
+npm run update-types
+```
+
+## 注意点
+- **マイグレーションファイルの作成は必ず`supabase migration new`コマンドを使用する**
+- マイグレーションファイルは手動で編集しない（新しいマイグレーションで修正）
+- DROP文は慎重に使用し、必要に応じてバックアップを取る
+- 本番環境に影響する大きな変更は事前に検討・承認を得る
+- **直接`supabase/migrations/`ディレクトリにファイルを作成することは禁止**

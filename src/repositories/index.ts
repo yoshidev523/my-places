@@ -1,0 +1,4 @@
+/**
+ * リポジトリのエクスポート
+ */
+export * from './placesRepository'; 

@@ -32,6 +32,13 @@ export function Header() {
               <span className="text-lg">❤️</span>
               お気に入り
             </Link>
+            <Link 
+              href="/visited" 
+              className="text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-2"
+            >
+              <span className="text-lg">✓</span>
+              訪問済み
+            </Link>
           </nav>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { Place } from '@/types';
 import { FavoriteButton } from './FavoriteButton';
+import { VisitedButton } from './VisitedButton';
 import { StarRating } from './StarRating';
 import { OpeningStatus } from './OpeningStatus';
 import { PriceLevel } from './PriceLevel';
@@ -10,16 +11,17 @@ import { PriceLevel } from './PriceLevel';
 export interface PlaceCardProps {
   place: Place;
   isFavorite?: boolean;
+  isVisited?: boolean;
 }
 
 /**
  * 場所カードコンポーネント（サーバーコンポーネント）
  */
-export function PlaceCard({ place, isFavorite = false }: PlaceCardProps) {
+export function PlaceCard({ place, isFavorite = false, isVisited = false }: PlaceCardProps) {
   return (
     <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6 hover:shadow-lg transition-shadow">
       <div className="space-y-4">
-        {/* ヘッダー（場所名とお気に入りボタン） */}
+        {/* ヘッダー（場所名とボタン） */}
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <h3 className="text-xl font-semibold text-gray-900">
@@ -33,7 +35,10 @@ export function PlaceCard({ place, isFavorite = false }: PlaceCardProps) {
               </div>
             )}
           </div>
-          <FavoriteButton placeId={place.place_id} isFavorite={isFavorite} />
+          <div className="flex gap-1">
+            <FavoriteButton placeId={place.place_id} isFavorite={isFavorite} />
+            <VisitedButton placeId={place.place_id} isVisited={isVisited} />
+          </div>
         </div>
 
         {/* 住所 */}

@@ -1,6 +1,7 @@
 import { Place } from '@/types';
 import { PlaceCard } from './place';
 import { getFavoriteStatuses } from '@/app/actions/favorites';
+import { getVisitedStatuses } from '@/app/actions/visited';
 
 /**
  * 検索結果一覧を表示するコンポーネント
@@ -67,9 +68,10 @@ export async function SearchResults({ places, query, error }: SearchResultsProps
     return <NoResults query={query} />;
   }
 
-  // お気に入り状態をサーバーアクション経由で取得
+  // お気に入り状態と訪問状態をサーバーアクション経由で取得
   const placeIds = places.map(place => place.place_id);
   const favoriteStatuses = await getFavoriteStatuses(placeIds);
+  const visitedStatuses = await getVisitedStatuses(placeIds);
 
   // 検索結果を表示
   return (
@@ -91,6 +93,7 @@ export async function SearchResults({ places, query, error }: SearchResultsProps
             key={place.place_id} 
             place={place} 
             isFavorite={favoriteStatuses.includes(place.place_id)}
+            isVisited={visitedStatuses.includes(place.place_id)}
           />
         ))}
       </div>
